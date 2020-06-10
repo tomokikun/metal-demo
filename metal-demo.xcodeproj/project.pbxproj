@@ -13,6 +13,7 @@
 		9F5A6C13249101FD0045F20F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 9F5A6C11249101FD0045F20F /* Main.storyboard */; };
 		9F5A6C1F249101FD0045F20F /* metal_demoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F5A6C1E249101FD0045F20F /* metal_demoTests.swift */; };
 		9F5A6C2A249101FD0045F20F /* metal_demoUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F5A6C29249101FD0045F20F /* metal_demoUITests.swift */; };
+		9F5A6C38249102750045F20F /* Shader.metal in Sources */ = {isa = PBXBuildFile; fileRef = 9F5A6C37249102750045F20F /* Shader.metal */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -46,6 +47,7 @@
 		9F5A6C25249101FD0045F20F /* metal-demoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "metal-demoUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		9F5A6C29249101FD0045F20F /* metal_demoUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = metal_demoUITests.swift; sourceTree = "<group>"; };
 		9F5A6C2B249101FD0045F20F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		9F5A6C37249102750045F20F /* Shader.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Shader.metal; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -98,6 +100,7 @@
 			children = (
 				9F5A6C0B249101FB0045F20F /* AppDelegate.swift */,
 				9F5A6C0D249101FB0045F20F /* ViewController.swift */,
+				9F5A6C37249102750045F20F /* Shader.metal */,
 				9F5A6C0F249101FD0045F20F /* Assets.xcassets */,
 				9F5A6C11249101FD0045F20F /* Main.storyboard */,
 				9F5A6C14249101FD0045F20F /* Info.plist */,
@@ -254,6 +257,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9F5A6C38249102750045F20F /* Shader.metal in Sources */,
 				9F5A6C0E249101FB0045F20F /* ViewController.swift in Sources */,
 				9F5A6C0C249101FB0045F20F /* AppDelegate.swift in Sources */,
 			);
