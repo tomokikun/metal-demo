@@ -49,7 +49,7 @@ class ViewController: NSViewController {
 
     override func loadView() {
         view = MTKView(frame: NSRect(x: 0, y: 0, width: 960, height: 540))
-        view.layer = CAMetalLayer()
+//        view.layer = CAMetalLayer()
     }
 
     override func viewDidLoad() {
@@ -57,13 +57,8 @@ class ViewController: NSViewController {
         
         let view = self.view as! MTKView
         
-        metalLayer = CAMetalLayer()
-        metalLayer.device = device
-        metalLayer.pixelFormat = .bgra8Unorm
-        metalLayer.framebufferOnly = true
-        metalLayer.frame = view.layer!.frame
-        view.layer!.addSublayer(metalLayer)
-        
+        view.device = device
+        view.colorPixelFormat = .bgra8Unorm
         view.delegate = self
         
         // setup
@@ -85,7 +80,12 @@ extension ViewController: MTKViewDelegate {
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
     }
     func draw(in view: MTKView) {
-        // create pipeline
+        autoreleasepool {
+            render(to: view)
+        }
+    }
+    
+    func render(to view: MTKView) {
         guard let library = device.makeDefaultLibrary() else {fatalError()}
         let descriptor = MTLRenderPipelineDescriptor()
         descriptor.vertexFunction = library.makeFunction(name: "myVertexShader")
@@ -98,9 +98,9 @@ extension ViewController: MTKViewDelegate {
         constants.animateYBy = sin(time) / 4
         
         // draw
-        guard let drawable = metalLayer.nextDrawable() else {fatalError()}
+        guard let drawable = view.currentDrawable else { return }
         renderPassDescriptor.colorAttachments[0].texture = drawable.texture
-        guard let commandBuffer = commandQueue.makeCommandBuffer() else {fatalError()}
+        guard let commandBuffer = commandQueue.makeCommandBuffer() else { return }
         let encoder = commandBuffer.makeRenderCommandEncoder(
             descriptor: renderPassDescriptor
         )!
