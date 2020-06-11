@@ -46,6 +46,7 @@ class ViewController: NSViewController {
     private var bufferIndex: MTLBuffer!
     private var renderPipelineState: MTLRenderPipelineState!
     private var metalLayer: CAMetalLayer!;
+    private var library: MTLLibrary!
 
     override func loadView() {
         view = MTKView(frame: NSRect(x: 0, y: 0, width: 960, height: 540))
@@ -60,7 +61,8 @@ class ViewController: NSViewController {
         view.device = device
         view.colorPixelFormat = .bgra8Unorm
         view.delegate = self
-        
+        library = device.makeDefaultLibrary()
+
         // setup
         commandQueue = device.makeCommandQueue()
         renderPassDescriptor = MTLRenderPassDescriptor()
@@ -87,12 +89,16 @@ extension ViewController: MTKViewDelegate {
     
     func render(to view: MTKView) {
         guard let library = device.makeDefaultLibrary() else {fatalError()}
-        let descriptor = MTLRenderPipelineDescriptor()
-        descriptor.vertexFunction = library.makeFunction(name: "myVertexShader")
-        descriptor.fragmentFunction = library.makeFunction(name: "myFragmentShader")
-        descriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
-        renderPipelineState = try! device.makeRenderPipelineState(descriptor: descriptor)
-
+        
+        // Make renderPipelineState only once because it's heavy proces
+        if (renderPipelineState == nil) {
+            let pipelineDescriptor = MTLRenderPipelineDescriptor()
+            pipelineDescriptor.vertexFunction = library.makeFunction(name: "myVertexShader")
+            pipelineDescriptor.fragmentFunction = library.makeFunction(name: "myFragmentShader")
+            pipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
+            renderPipelineState = try! device.makeRenderPipelineState(descriptor: pipelineDescriptor)
+        }
+        
         time += 1 / Float(view.preferredFramesPerSecond)  // default value: 60?
         constants.animateXBy = cos(time) / 4
         constants.animateYBy = sin(time) / 4
