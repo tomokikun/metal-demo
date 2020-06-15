@@ -8,79 +8,50 @@
 
 import Cocoa
 import MetalKit
+import simd
 
-
-class ViewController: NSViewController {
-
-    private let positionData: [Float] = [
-        0.3, 0.3, 0.0, 1.0,
-        0.3, -0.3, 0.0, 1.0,
-        -0.3, -0.3, 0.0, 1.0,
-        -0.3, 0.3, 0.0, 1.0,
-        ]
-
-    private let colorData: [Float] = [
-        1, 0, 0, 1,
-        0, 1, 0, 1,
-        0, 0, 1, 1,
-        1, 0, 1, 1,
-    ]
-    
-    private let indexData: [UInt16] = [
-        0, 1, 2,
-        2, 3, 0
-    ]
-    
-    struct Constants {
-        var animateXBy: Float = 0.0
-        var animateYBy: Float = 0.0
-    }
-    private var constants = Constants()
-    private var time: Float = 0.0
+class ViewController: NSViewController, MTKViewDelegate {
     
     private let device = MTLCreateSystemDefaultDevice()!
     private var commandQueue: MTLCommandQueue!
     private var renderPassDescriptor: MTLRenderPassDescriptor!
-    private var bufferPosition: MTLBuffer!
-    private var bufferColor: MTLBuffer!
-    private var bufferIndex: MTLBuffer!
     private var renderPipelineState: MTLRenderPipelineState!
-    private var metalLayer: CAMetalLayer!;
-    private var library: MTLLibrary!
-
+    private var texture: MTLTexture!
+    private var mView: MTKView!
+    private let imageName: String = "planet"
+    
     override func loadView() {
         view = MTKView(frame: NSRect(x: 0, y: 0, width: 960, height: 540))
-//        view.layer = CAMetalLayer()
     }
-
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        let view = self.view as! MTKView
-        
-        view.device = device
-        view.colorPixelFormat = .bgra8Unorm
-        view.delegate = self
-        library = device.makeDefaultLibrary()
-
-        // setup
+        setupMetal()
+        loadTexture(name: imageName)
+        mView.enableSetNeedsDisplay = true
+        mView.framebufferOnly = false
+    }
+    
+    private func setupMetal() {
+        mView = self.view as? MTKView
+        mView.device = device
+        mView.colorPixelFormat = .bgra8Unorm
+        mView.delegate = self
         commandQueue = device.makeCommandQueue()
         renderPassDescriptor = MTLRenderPassDescriptor()
         renderPassDescriptor.colorAttachments[0].loadAction = MTLLoadAction.clear
         renderPassDescriptor.colorAttachments[0].storeAction = MTLStoreAction.store
         renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(0.0, 0.1, 0.2, 1.0)
-        
-        // create buffer
-        let size = positionData.count * MemoryLayout<Float>.size
-        bufferPosition = device.makeBuffer(bytes: positionData, length: size)
-        bufferColor = device.makeBuffer(bytes: colorData, length: size)
-        bufferIndex = device.makeBuffer(bytes: indexData, length: indexData.count * MemoryLayout<UInt16>.size)
-        }
-}
-
-extension ViewController: MTKViewDelegate {
-    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
     }
+    
+    private func loadTexture(name: String) {
+        let textureLoader = MTKTextureLoader(device: device)
+        texture = try! textureLoader.newTexture(name: name, scaleFactor: 1, bundle: nil)
+        mView.colorPixelFormat = texture.pixelFormat
+    }
+    
+    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
+        }
+    
     func draw(in view: MTKView) {
         autoreleasepool {
             render(to: view)
@@ -88,39 +59,23 @@ extension ViewController: MTKViewDelegate {
     }
     
     func render(to view: MTKView) {
-        guard let library = device.makeDefaultLibrary() else {fatalError()}
-        
-        // Make renderPipelineState only once because it's heavy proces
-        if (renderPipelineState == nil) {
-            let pipelineDescriptor = MTLRenderPipelineDescriptor()
-            pipelineDescriptor.vertexFunction = library.makeFunction(name: "myVertexShader")
-            pipelineDescriptor.fragmentFunction = library.makeFunction(name: "myFragmentShader")
-            pipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
-            renderPipelineState = try! device.makeRenderPipelineState(descriptor: pipelineDescriptor)
-        }
-        
-        time += 1 / Float(view.preferredFramesPerSecond)  // default value: 60?
-        constants.animateXBy = cos(time) / 4
-        constants.animateYBy = sin(time) / 4
-        
-        // draw
         guard let drawable = view.currentDrawable else { return }
-        renderPassDescriptor.colorAttachments[0].texture = drawable.texture
         guard let commandBuffer = commandQueue.makeCommandBuffer() else { return }
-        let encoder = commandBuffer.makeRenderCommandEncoder(
-            descriptor: renderPassDescriptor
-        )!
-        encoder.setRenderPipelineState(renderPipelineState)
-        encoder.setVertexBuffer(bufferPosition, offset: 0, index: 0)
-        encoder.setVertexBuffer(bufferColor, offset: 0, index:1)
-        encoder.setVertexBytes(&constants, length: MemoryLayout<Constants>.stride, index: 2)
         
-        encoder.drawIndexedPrimitives(type: .triangle,
-                               indexCount: indexData.count,
-                               indexType: .uint16,
-                               indexBuffer: bufferIndex,
-                               indexBufferOffset: 0)
-        encoder.endEncoding()
+        let w = min(texture.width, drawable.texture.width)
+        let h = min(texture.height, drawable.texture.height)
+        
+        let blitEncoder = commandBuffer.makeBlitCommandEncoder()!
+        blitEncoder.copy(from: texture,
+                         sourceSlice: 0,
+                         sourceLevel: 0,
+                         sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
+                         sourceSize: MTLSizeMake(w, h, texture.depth),
+                         to: drawable.texture,
+                         destinationSlice: 0,
+                         destinationLevel: 0,
+                         destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0))
+        blitEncoder.endEncoding()
         commandBuffer.present(drawable)
         commandBuffer.commit()
     }
