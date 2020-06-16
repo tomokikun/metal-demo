@@ -11,28 +11,21 @@ using namespace metal;
 
 struct MyVertex {
     float4 position [[position]];
-    float4 color;
+    float2 textureCoordinate;
 };
 
-struct Constants {
-    float animateXBy;
-    float animateYBy;
-};
-
-vertex MyVertex myVertexShader(device float4 *position [[ buffer(0) ]],
-                               device float4 *color [[ buffer(1) ]],
-                               constant Constants &constants [[ buffer(2) ]],
-                               uint vertexId [[vertex_id]]) {
-    
+vertex MyVertex vertexShader(device float4 *position [[ buffer(0) ]],
+                             device float2 *textureCoordinate [[ buffer(1) ]],
+                             uint vertexId [[vertex_id]]) {
     MyVertex v;
     v.position = position[vertexId];
-    v.position.x += constants.animateXBy;
-    v.position.y += constants.animateYBy;
-    v.color = color[vertexId] + float4(0.0, 0.0, constants.animateYBy, 0.0);
-    v.color = color[vertexId] + float4(constants.animateYBy);
+    v.textureCoordinate = textureCoordinate[vertexId];
     return v;
 }
 
-fragment float4 myFragmentShader(MyVertex vertexIn [[stage_in]]) {
-    return vertexIn.color;
+fragment float4 fragmentShader(MyVertex vertexIn [[stage_in]],
+                               texture2d<float> texture [[ texture(0) ]]) {
+    constexpr sampler defaultSampler;
+    float4 color = texture.sample(defaultSampler, vertexIn.textureCoordinate);
+    return color;
 }
