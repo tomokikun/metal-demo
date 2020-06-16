@@ -30,6 +30,14 @@ private let indexData: [UInt16] = [
     2, 3, 1
 ]
 
+struct Constants {
+    var rotateBy: Float = 0.0;
+}
+
+private var constants = Constants()
+private var time: Float = 0.0
+
+
 class ViewController: NSViewController, MTKViewDelegate {
     
     private let device = MTLCreateSystemDefaultDevice()!
@@ -83,6 +91,11 @@ class ViewController: NSViewController, MTKViewDelegate {
         renderPipelineState = try! device.makeRenderPipelineState(descriptor: pipelineDescriptor)
     }
     
+    private func animate() {
+        time += 1 / Float(mtkView.preferredFramesPerSecond)
+        constants.rotateBy = time
+    }
+    
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
         }
     
@@ -102,10 +115,13 @@ class ViewController: NSViewController, MTKViewDelegate {
         renderPassDescriptor.colorAttachments[0].storeAction = .store
         renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(0.0, 0.0, 1.0, 1.0)
         guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else { return }
-    
+        
+        animate()
+        
         encoder.setRenderPipelineState(renderPipelineState)
         encoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
         encoder.setVertexBuffer(textureCoordinateBuffer, offset: 0, index: 1)
+        encoder.setVertexBytes(&constants, length: MemoryLayout<Constants>.stride, index: 2)
         encoder.setFragmentTexture(texture, index: 0)
         
         encoder.drawIndexedPrimitives(type: .triangleStrip, indexCount: indexData.count, indexType: .uint16, indexBuffer: indexBuffer, indexBufferOffset: 0)
