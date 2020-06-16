@@ -23,9 +23,8 @@ vertex MyVertex vertexShader(device float4 *position [[ buffer(0) ]],
     return v;
 }
 
-fragment float4 fragmentShader(MyVertex vertexIn [[stage_in]],
+fragment half4 fragmentShader(MyVertex vertexIn [[stage_in]],
                                texture2d<float> texture [[ texture(0) ]]) {
     constexpr sampler defaultSampler;
-    float4 color = texture.sample(defaultSampler, vertexIn.textureCoordinate);
-    return color;
+    return half4(texture.sample(defaultSampler, vertexIn.textureCoordinate));
 }
