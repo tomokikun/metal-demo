@@ -12,17 +12,17 @@ import simd
 
 
 let vertexData: [Float] = [
-    -1, -1, 0, 1,
-    1, -1, 0, 1,
-    -1, 1, 0, 1,
-    1, 1, 0, 1
+    -1, -1, 0, 1, // 左下
+    1, -1, 0, 1, // 右下
+    -1, 1, 0, 1, // 左上
+    1, 1, 0, 1 // 右上
 ]
 
 let textureCoordinateData: [Float] = [
-    0, 1,
-    1, 1,
-    1, 0,
-    0, 0
+    0, 0, // 左下
+    1, 0, // 右下
+    0, 1, // 左上
+    1, 1, // 右上
 ]
 
 private let indexData: [UInt16] = [
