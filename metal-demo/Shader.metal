@@ -28,10 +28,10 @@ vertex MyVertex vertexShader(device float4 *position [[ buffer(0) ]],
                              device float2 *textureCoordinate [[ buffer(1) ]],
                              constant Constants &constants [[ buffer(2) ]],
                              uint vertexId [[vertex_id]]) {
-    MyVertex v;
-    v.position = rotate2d(position[vertexId], constants.rotateBy);
-    v.textureCoordinate = textureCoordinate[vertexId];
-    return v;
+    return {
+        rotate2d(position[vertexId], constants.rotateBy),
+        textureCoordinate[vertexId]
+    };
 }
 
 fragment half4 fragmentShader(MyVertex vertexIn [[stage_in]],
