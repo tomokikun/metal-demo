@@ -43,12 +43,18 @@ class ViewController: NSViewController, MTKViewDelegate {
     private let device = MTLCreateSystemDefaultDevice()!
     private var commandQueue: MTLCommandQueue!
     private var renderPipelineState: MTLRenderPipelineState!
+    private var computePipelineState: MTLComputePipelineState!
     private var vertexBuffer: MTLBuffer!
     private var indexBuffer: MTLBuffer!
     private var textureCoordinateBuffer: MTLBuffer!
     private var texture: MTLTexture!
     private var mtkView: MTKView!
     private let imageName: String = "planet"
+    private var threadgroupSize: MTLSize = MTLSize(width:64, height: 64, depth: 1)
+    private var w: Int = 0
+    private var h: Int = 0
+    private var threadgroupCount: MTLSize!
+    private var outTexture: MTLTexture!
     
     override func loadView() {
         view = MTKView(frame: NSRect(x: 0, y: 0, width: 810, height: 540), device: device)
@@ -60,6 +66,7 @@ class ViewController: NSViewController, MTKViewDelegate {
         mtkView.framebufferOnly = false
         makeBuffers()
         makePipeline(format: texture.pixelFormat)
+        setupComputeFunc()
     }
     
     private func setupMetal() {
@@ -75,7 +82,7 @@ class ViewController: NSViewController, MTKViewDelegate {
         texture = try! textureLoader.newTexture(name: name, scaleFactor: scaleFactor, bundle: nil)
         mtkView.colorPixelFormat = texture.pixelFormat
     }
-    
+        
     private func makeBuffers() {
         vertexBuffer = device.makeBuffer(bytes: vertexData, length: MemoryLayout<Float>.size * vertexData.count)
         textureCoordinateBuffer = device.makeBuffer(bytes: textureCoordinateData, length: MemoryLayout<Float>.size * textureCoordinateData.count)
@@ -84,16 +91,35 @@ class ViewController: NSViewController, MTKViewDelegate {
     
     private func makePipeline(format: MTLPixelFormat) {
         guard let library = device.makeDefaultLibrary() else { return }
-        let pipelineDescriptor = MTLRenderPipelineDescriptor()
-        pipelineDescriptor.vertexFunction = library.makeFunction(name: "vertexShader")
-        pipelineDescriptor.fragmentFunction = library.makeFunction(name: "fragmentShader")
-        pipelineDescriptor.colorAttachments[0].pixelFormat = format
-        renderPipelineState = try! device.makeRenderPipelineState(descriptor: pipelineDescriptor)
+        let function = library.makeFunction(name: "computeShader")!
+        computePipelineState = try! device.makeComputePipelineState(function: function)
     }
     
     private func animate() {
         time += 1 / Float(mtkView.preferredFramesPerSecond)
         constants.rotateBy = time
+    }
+    
+    private func setupComputeFunc() {
+        w = threadgroupSize.width
+        h = threadgroupSize.height
+        threadgroupCount = MTLSize(
+            width: (texture.width + w - 1) / w,
+            height: (texture.height + h - 1) / h,
+            depth: 1
+        )
+    }
+    
+    private func saveImage(commandBuffer: MTLCommandBuffer) {
+
+        let blitEncoder = commandBuffer.makeBlitCommandEncoder()!
+        blitEncoder.synchronize(resource: outTexture)
+        blitEncoder.endEncoding()
+        commandBuffer.waitUntilCompleted()
+        
+        // texture to image
+        
+        
     }
     
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
@@ -106,28 +132,24 @@ class ViewController: NSViewController, MTKViewDelegate {
     }
     
     func render(to view: MTKView) {
-        guard let renderPassDescriptor = view.currentRenderPassDescriptor else { return }
         guard let drawable = view.currentDrawable else { return }
         guard let commandBuffer = commandQueue.makeCommandBuffer() else { return }
+
+        let descriptor: MTLTextureDescriptor = .texture2DDescriptor(pixelFormat: .bgra8Unorm, width: texture.width, height: texture.height, mipmapped: false)
+        descriptor.usage = [.shaderRead, .shaderWrite]
+        descriptor.storageMode = .managed
+        outTexture = device.makeTexture(descriptor: descriptor)!
         
-        renderPassDescriptor.colorAttachments[0].texture = drawable.texture
-        renderPassDescriptor.colorAttachments[0].loadAction = .clear
-        renderPassDescriptor.colorAttachments[0].storeAction = .store
-        renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(0.0, 0.0, 1.0, 1.0)
-        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else { return }
-        
-        animate()
-        
-        encoder.setRenderPipelineState(renderPipelineState)
-        encoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
-        encoder.setVertexBuffer(textureCoordinateBuffer, offset: 0, index: 1)
-        encoder.setVertexBytes(&constants, length: MemoryLayout<Constants>.stride, index: 2)
-        encoder.setFragmentTexture(texture, index: 0)
-        
-        encoder.drawIndexedPrimitives(type: .triangleStrip, indexCount: indexData.count, indexType: .uint16, indexBuffer: indexBuffer, indexBufferOffset: 0)
-        
+        let encoder = commandBuffer.makeComputeCommandEncoder()!
+        encoder.setComputePipelineState(computePipelineState)
+        encoder.setTexture(texture, index: 0)
+        encoder.setTexture(outTexture, index: 1)
+
+        encoder.dispatchThreadgroups(threadgroupSize, threadsPerThreadgroup: threadgroupCount)
         encoder.endEncoding()
+        commandBuffer.addCompletedHandler(saveImage)
         commandBuffer.present(drawable)
         commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
     }
 }
