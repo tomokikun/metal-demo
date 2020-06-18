@@ -41,16 +41,15 @@ vertex MyVertex vertexShader(device float4 *position [[ buffer(0) ]],
 }
 
 fragment half4 fragmentShader(MyVertex vertexIn [[stage_in]],
-                               texture2d<float> texture [[ texture(0) ]]) {
-    constexpr sampler defaultSampler;
-    return half4(texture.sample(defaultSampler, vertexIn.textureCoordinate));
+                              sampler sampler [[ sampler(0) ]],
+                              texture2d<float, access::sample> texture [[ texture(0) ]]) {
+    return half4(texture.sample(sampler, vertexIn.textureCoordinate));
 }
 
 kernel void computeShader(texture2d<float, access::read> inTexture [[ texture(0) ]],
                           texture2d<float, access::write> outTexture [[ texture(1) ]],
                           uint2 gridId [[ thread_position_in_grid ]]) {
-    
-//    float4 inColor = inTexture.read(rotate2d(gridId, 1.0));
+    if (outTexture.get_width() < gridId.x || outTexture.get_height() < gridId.y) { return; }
     float4 inColor = inTexture.read(gridId);
     outTexture.write(inColor, gridId);
 }
