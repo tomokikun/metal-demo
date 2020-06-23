@@ -50,8 +50,8 @@ class ViewController: NSViewController, MTKViewDelegate {
     private var posBuffer: MTLBuffer!
     private var texture: MTLTexture!
     private var mtkView: MTKView!
-    private let imageName: String = "planet"
-    private var threadgroupSize: MTLSize = MTLSize(width:64, height: 64, depth: 1)
+    private let imageName: String = "image"
+    private var threadgroupSize: MTLSize = MTLSize(width: 256, height: 256, depth: 1)
     private var width: Int = 810
     private var height: Int = 540
     private var threadgroupCount: MTLSize!
@@ -60,6 +60,7 @@ class ViewController: NSViewController, MTKViewDelegate {
     private var count: Int = 0
     private var queue: DispatchQueue!
     private var outTextures: [MTLTexture] = []
+    private var offscreen: MTLTexture!
     
     override func loadView() {
         view = MTKView(frame: NSRect(x: 0, y: 0, width: width, height: height), device: device)
@@ -155,20 +156,23 @@ class ViewController: NSViewController, MTKViewDelegate {
     }
     
     private func saveImage(_ tex: MTLTexture) {
-        guard let outImage = CIImage(mtlTexture: tex, options: nil),
-            let jpgData = CIContext().jpegRepresentation(of: outImage, colorSpace: outImage.colorSpace ?? CGColorSpaceCreateDeviceRGB(), options: [:]) else { return }
-        
-        do {
-            let path = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0] as String
-            let filename = NSString(format: "/output/%05d.jpg", count) as String
-            defer {
-                count += 1
-            }
-            let url: URL = URL(fileURLWithPath: path+filename)
-            try jpgData.write(to: url)
-        } catch {
-            print("fail to save image.")
-        }
+        autoreleasepool(invoking: {
+            guard let outImage = CIImage(mtlTexture: tex, options: nil),
+                    let jpgData = CIContext().jpegRepresentation(of: outImage, colorSpace: outImage.colorSpace ?? CGColorSpaceCreateDeviceRGB(), options: [:]) else { return }
+            
+                do {
+                    let path = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0] as String
+                    let filename = NSString(format: "/output/%05d.jpg", count) as String
+                    defer {
+                        count += 1
+                        print(outTextures.count)
+                    }
+                    let url: URL = URL(fileURLWithPath: path+filename)
+                    try jpgData.write(to: url)
+                } catch {
+                    print("fail to save image.")
+                }
+        })
     }
     
     private func makeSampler() {
@@ -190,37 +194,62 @@ class ViewController: NSViewController, MTKViewDelegate {
     }
     
     func render(to view: MTKView) {
-        guard let drawable = view.currentDrawable else { return }
         guard let commandBuffer = commandQueue.makeCommandBuffer() else { return }
+        
+        // offscreen
         do {
-            guard let renderPassDescriptor = view.currentRenderPassDescriptor else { return }
-            renderPassDescriptor.colorAttachments[0].texture = drawable.texture
-            renderPassDescriptor.colorAttachments[0].loadAction = .clear
-            renderPassDescriptor.colorAttachments[0].storeAction = .store
-            renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(0.0, 0.0, 1.0, 1.0)
-      
-            let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor)!
-            renderEncoder.setRenderPipelineState(renderPipelineState)
-            renderEncoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
-            renderEncoder.setVertexBuffer(textureCoordinateBuffer, offset: 0, index: 1)
-            renderEncoder.setVertexBytes(&constants, length: MemoryLayout<Constants>.stride, index: 2)
-            
-            renderEncoder.setFragmentTexture(texture, index: 0)
-            renderEncoder.setFragmentBuffer(posBuffer, offset: 0, index: 0)
-            renderEncoder.setFragmentSamplerState(sampler, index: 0)
-            renderEncoder.drawIndexedPrimitives(type: .triangleStrip, indexCount: indexData.count, indexType: .uint16, indexBuffer: indexBuffer, indexBufferOffset: 0)
-            renderEncoder.endEncoding()
+            let offscreenDescriptor: MTLTextureDescriptor = .texture2DDescriptor(pixelFormat: texture.pixelFormat, width: width, height: height, mipmapped: false)
+            offscreenDescriptor.usage = [.renderTarget, .shaderRead, .shaderWrite]
+            offscreen = device.makeTexture(descriptor: offscreenDescriptor)
+
+            let offscreenRenderPassDescriptor: MTLRenderPassDescriptor = MTLRenderPassDescriptor()
+            offscreenRenderPassDescriptor.colorAttachments[0].texture = offscreen
+            offscreenRenderPassDescriptor.colorAttachments[0].loadAction = .clear
+            offscreenRenderPassDescriptor.colorAttachments[0].storeAction = .store
+            offscreenRenderPassDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(1.0, 0.0, 1.0, 1.0)
+
+            let offscreenRenderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: offscreenRenderPassDescriptor)!
+            offscreenRenderEncoder.setRenderPipelineState(renderPipelineState)
+            offscreenRenderEncoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
+            offscreenRenderEncoder.setVertexBuffer(textureCoordinateBuffer, offset: 0, index: 1)
+            offscreenRenderEncoder.setVertexBytes(&constants, length: MemoryLayout<Constants>.stride, index: 2)
+            offscreenRenderEncoder.setFragmentTexture(texture, index: 0)
+            offscreenRenderEncoder.setFragmentBuffer(posBuffer, offset: 0, index: 0)
+            offscreenRenderEncoder.setFragmentSamplerState(sampler, index: 0)
+            offscreenRenderEncoder.drawIndexedPrimitives(type: .triangleStrip, indexCount: indexData.count, indexType: .uint16, indexBuffer: indexBuffer, indexBufferOffset: 0)
+            offscreenRenderEncoder.endEncoding()
         }
+
+        // display
+        guard let drawable = view.currentDrawable else { return }
         do {
-            let descriptor: MTLTextureDescriptor = .texture2DDescriptor(pixelFormat: .bgra8Unorm, width: texture.width, height: texture.height, mipmapped: false)
+                guard let renderPassDescriptor = view.currentRenderPassDescriptor else { return }
+                renderPassDescriptor.colorAttachments[0].texture = drawable.texture
+                renderPassDescriptor.colorAttachments[0].loadAction = .clear
+                renderPassDescriptor.colorAttachments[0].storeAction = .store
+                renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(0.0, 0.0, 1.0, 1.0)
+
+                let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor)!
+                renderEncoder.setRenderPipelineState(renderPipelineState)
+                renderEncoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
+                renderEncoder.setVertexBuffer(textureCoordinateBuffer, offset: 0, index: 1)
+                renderEncoder.setVertexBytes(&constants, length: MemoryLayout<Constants>.stride, index: 2)
+
+                renderEncoder.setFragmentTexture(texture, index: 0)
+                renderEncoder.setFragmentBuffer(posBuffer, offset: 0, index: 0)
+                renderEncoder.setFragmentSamplerState(sampler, index: 0)
+                renderEncoder.drawIndexedPrimitives(type: .triangleStrip, indexCount: indexData.count, indexType: .uint16, indexBuffer: indexBuffer, indexBufferOffset: 0)
+                renderEncoder.endEncoding()
+        }
+        
+        do {
+            let descriptor: MTLTextureDescriptor = .texture2DDescriptor(pixelFormat: offscreen.pixelFormat, width: offscreen.width, height: offscreen.height, mipmapped: false)
             descriptor.usage = [.shaderRead, .shaderWrite]
             descriptor.storageMode = .managed
-            descriptor.width = drawable.texture.width
-            descriptor.height = drawable.texture.height
             outTextures.insert(device.makeTexture(descriptor: descriptor)!, at: 0)
             let computeEncoder = commandBuffer.makeComputeCommandEncoder()!
             computeEncoder.setComputePipelineState(computePipelineState)
-            computeEncoder.setTexture(drawable.texture, index: 0)
+            computeEncoder.setTexture(offscreen, index: 0)
             computeEncoder.setTexture(outTextures[0], index: 1)
             computeEncoder.dispatchThreadgroups(threadgroupSize, threadsPerThreadgroup: threadgroupCount)
             computeEncoder.endEncoding()
@@ -228,6 +257,7 @@ class ViewController: NSViewController, MTKViewDelegate {
         commandBuffer.addCompletedHandler(saveImage)
         commandBuffer.present(drawable)
         commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
         animate()
     }
 }
