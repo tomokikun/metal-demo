@@ -52,15 +52,17 @@ class ViewController: NSViewController, MTKViewDelegate {
     private var mtkView: MTKView!
     private let imageName: String = "planet"
     private var threadgroupSize: MTLSize = MTLSize(width:64, height: 64, depth: 1)
-    private var w: Int = 0
-    private var h: Int = 0
+    private var width: Int = 810
+    private var height: Int = 540
     private var threadgroupCount: MTLSize!
     private var outTexture: MTLTexture!
     private var sampler: MTLSamplerState!
     private var count: Int = 0
+    private var queue: DispatchQueue!
+    private var outTextures: [MTLTexture] = []
     
     override func loadView() {
-        view = MTKView(frame: NSRect(x: 0, y: 0, width: 810, height: 540), device: device)
+        view = MTKView(frame: NSRect(x: 0, y: 0, width: width, height: height), device: device)
     }
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -72,6 +74,7 @@ class ViewController: NSViewController, MTKViewDelegate {
         makeSampler()
         setupComputeFunc()
         createDir("output")
+        queue = DispatchQueue.global(qos: .userInteractive)
     }
     
     private func createDir(_ dirpath: String) {
@@ -105,7 +108,6 @@ class ViewController: NSViewController, MTKViewDelegate {
         vertexBuffer = device.makeBuffer(bytes: vertexData, length: MemoryLayout<Float>.size * vertexData.count)
         textureCoordinateBuffer = device.makeBuffer(bytes: textureCoordinateData, length: MemoryLayout<Float>.size * textureCoordinateData.count)
         indexBuffer = device.makeBuffer(bytes: indexData, length: indexData.count * MemoryLayout<UInt16>.size)
-
         posBuffer = device.makeBuffer(length: texture.width * texture.height, options: .storageModeShared)
     }
     
@@ -128,8 +130,8 @@ class ViewController: NSViewController, MTKViewDelegate {
     }
     
     private func setupComputeFunc() {
-        w = threadgroupSize.width
-        h = threadgroupSize.height
+        let w = threadgroupSize.width
+        let h = threadgroupSize.height
         threadgroupCount = MTLSize(
             width: (texture.width + w - 1) / w,
             height: (texture.height + h - 1) / h,
@@ -138,20 +140,24 @@ class ViewController: NSViewController, MTKViewDelegate {
     }
     
     private func saveImage(_commandBuffer: MTLCommandBuffer) {
-        let commandBuffer: MTLCommandBuffer = _commandBuffer.commandQueue.makeCommandBuffer()!
-        let blitEncoder = commandBuffer.makeBlitCommandEncoder()!
         
-        blitEncoder.synchronize(resource: outTexture)
-        blitEncoder.endEncoding()
-        commandBuffer.addCompletedHandler({_ in
-            self.saveImage()
-        })
-        commandBuffer.commit()
+        guard let tex: MTLTexture = outTextures.popLast() else { return }
+        queue.async{
+            let commandBuffer: MTLCommandBuffer = _commandBuffer.commandQueue.makeCommandBuffer()!
+            let blitEncoder = commandBuffer.makeBlitCommandEncoder()!
+            blitEncoder.synchronize(resource: tex)
+            blitEncoder.endEncoding()
+            commandBuffer.addCompletedHandler({_ in
+                self.saveImage(tex)
+            })
+            commandBuffer.commit()
+        }
     }
     
-    private func saveImage() {
-        guard let outImage = CIImage(mtlTexture: outTexture, options: nil),
+    private func saveImage(_ tex: MTLTexture) {
+        guard let outImage = CIImage(mtlTexture: tex, options: nil),
             let jpgData = CIContext().jpegRepresentation(of: outImage, colorSpace: outImage.colorSpace ?? CGColorSpaceCreateDeviceRGB(), options: [:]) else { return }
+        
         do {
             let path = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0] as String
             let filename = NSString(format: "/output/%05d.jpg", count) as String
@@ -209,19 +215,16 @@ class ViewController: NSViewController, MTKViewDelegate {
             let descriptor: MTLTextureDescriptor = .texture2DDescriptor(pixelFormat: .bgra8Unorm, width: texture.width, height: texture.height, mipmapped: false)
             descriptor.usage = [.shaderRead, .shaderWrite]
             descriptor.storageMode = .managed
-            outTexture = device.makeTexture(descriptor: descriptor)!
-            print("texture: \(texture.width) x \(texture.height)")
-
-            print("outTexture: \(outTexture.width) x \(outTexture.height)")
-            
+            descriptor.width = drawable.texture.width
+            descriptor.height = drawable.texture.height
+            outTextures.insert(device.makeTexture(descriptor: descriptor)!, at: 0)
             let computeEncoder = commandBuffer.makeComputeCommandEncoder()!
             computeEncoder.setComputePipelineState(computePipelineState)
             computeEncoder.setTexture(drawable.texture, index: 0)
-            computeEncoder.setTexture(outTexture, index: 1)
+            computeEncoder.setTexture(outTextures[0], index: 1)
             computeEncoder.dispatchThreadgroups(threadgroupSize, threadsPerThreadgroup: threadgroupCount)
             computeEncoder.endEncoding()
         }
-        // TODO: 別スレッドで処理するように修正
         commandBuffer.addCompletedHandler(saveImage)
         commandBuffer.present(drawable)
         commandBuffer.commit()
