@@ -43,6 +43,7 @@ vertex MyVertex vertexShader(device float4 *position [[ buffer(0) ]],
 fragment half4 fragmentShader(MyVertex vertexIn [[stage_in]],
                               sampler sampler [[ sampler(0) ]],
                               texture2d<float, access::sample> texture [[ texture(0) ]]) {
+    vertexIn.textureCoordinate.y = 1.0 - vertexIn.textureCoordinate.y;
     return half4(texture.sample(sampler, vertexIn.textureCoordinate));
 }
 

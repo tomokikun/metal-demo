@@ -165,7 +165,6 @@ class ViewController: NSViewController, MTKViewDelegate {
                     let filename = NSString(format: "/output/%05d.jpg", count) as String
                     defer {
                         count += 1
-                        print(outTextures.count)
                     }
                     let url: URL = URL(fileURLWithPath: path+filename)
                     try jpgData.write(to: url)
