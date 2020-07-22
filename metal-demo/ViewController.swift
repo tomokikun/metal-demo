@@ -43,6 +43,7 @@ class ViewController: NSViewController, MTKViewDelegate {
     private let device = MTLCreateSystemDefaultDevice()!
     private var commandQueue: MTLCommandQueue!
     private var renderPipelineState: MTLRenderPipelineState!
+    private var renderTexturePipelineState: MTLRenderPipelineState!
     private var computePipelineState: MTLComputePipelineState!
     private var vertexBuffer: MTLBuffer!
     private var indexBuffer: MTLBuffer!
@@ -72,6 +73,8 @@ class ViewController: NSViewController, MTKViewDelegate {
         mtkView.framebufferOnly = false
         makeBuffers()
         makePipeline(format: texture.pixelFormat)
+        print(texture.pixelFormat.rawValue)
+        makePipelineForTexture(format: texture.pixelFormat)
         makeSampler()
         setupComputeFunc()
         createDir("output")
@@ -120,9 +123,23 @@ class ViewController: NSViewController, MTKViewDelegate {
         pipelineDescriptor.fragmentFunction = library.makeFunction(name: "fragmentShader")
         pipelineDescriptor.colorAttachments[0].pixelFormat = format
         renderPipelineState = try! device.makeRenderPipelineState(descriptor: pipelineDescriptor)
+    }
+    
+    private func makePipelineForTexture(format: MTLPixelFormat) {
         
-        let function = library.makeFunction(name: "computeShader")!
-        computePipelineState = try! device.makeComputePipelineState(function: function)
+        guard let library = device.makeDefaultLibrary() else { return }
+        do {
+            let texturePipelineDescriptor = MTLRenderPipelineDescriptor()
+            texturePipelineDescriptor.vertexFunction = library.makeFunction(name: "vertexShader")
+            texturePipelineDescriptor.fragmentFunction = library.makeFunction(name: "fragmentShaderForTexture")
+            texturePipelineDescriptor.colorAttachments[0].pixelFormat = format  // TODO: ここを修正
+            renderTexturePipelineState = try! device.makeRenderPipelineState(descriptor: texturePipelineDescriptor)
+        }
+        
+        do {
+            let function = library.makeFunction(name: "computeShader")!
+            computePipelineState = try! device.makeComputePipelineState(function: function)
+        }
     }
     
     private func animate() {
@@ -208,7 +225,7 @@ class ViewController: NSViewController, MTKViewDelegate {
             offscreenRenderPassDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(1.0, 0.0, 1.0, 1.0)
 
             let offscreenRenderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: offscreenRenderPassDescriptor)!
-            offscreenRenderEncoder.setRenderPipelineState(renderPipelineState)
+            offscreenRenderEncoder.setRenderPipelineState(renderTexturePipelineState)
             offscreenRenderEncoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
             offscreenRenderEncoder.setVertexBuffer(textureCoordinateBuffer, offset: 0, index: 1)
             offscreenRenderEncoder.setVertexBytes(&constants, length: MemoryLayout<Constants>.stride, index: 2)

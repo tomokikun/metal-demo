@@ -47,6 +47,12 @@ fragment half4 fragmentShader(MyVertex vertexIn [[stage_in]],
     return half4(texture.sample(sampler, vertexIn.textureCoordinate));
 }
 
+fragment half4 fragmentShaderForTexture(MyVertex vertexIn [[stage_in]],
+                              sampler sampler [[ sampler(0) ]],
+                              texture2d<float, access::sample> texture [[ texture(0) ]]) {
+    return half4(texture.sample(sampler, vertexIn.textureCoordinate));
+}
+
 kernel void computeShader(texture2d<float, access::read> inTexture [[ texture(0) ]],
                           texture2d<float, access::write> outTexture [[ texture(1) ]],
                           uint2 gridId [[ thread_position_in_grid ]]) {
