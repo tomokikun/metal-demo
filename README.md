@@ -10,7 +10,7 @@
 | RotateImage+Offscreen+Save/ | 画像表示、画像回転、オフスクリーンレンダリング、レンダリングした画像を保存を行います。|
 | Filtering/ | 画像のフィルタリングを行います。 |
 
-# Challenge
+# Challenges
 - 画像をMetalでレンダリングする
 - vertex/fragment shaderで画像を回転させる
 - compute shaderで画像を回転させる
