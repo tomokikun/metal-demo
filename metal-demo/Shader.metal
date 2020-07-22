@@ -11,28 +11,51 @@ using namespace metal;
 
 struct MyVertex {
     float4 position [[position]];
-    float4 color;
+    float2 textureCoordinate;
 };
 
 struct Constants {
-    float animateXBy;
-    float animateYBy;
+    float rotateBy;
 };
 
-vertex MyVertex myVertexShader(device float4 *position [[ buffer(0) ]],
-                               device float4 *color [[ buffer(1) ]],
-                               constant Constants &constants [[ buffer(2) ]],
-                               uint vertexId [[vertex_id]]) {
-    
-    MyVertex v;
-    v.position = position[vertexId];
-    v.position.x += constants.animateXBy;
-    v.position.y += constants.animateYBy;
-    v.color = color[vertexId] + float4(0.0, 0.0, constants.animateYBy, 0.0);
-    v.color = color[vertexId] + float4(constants.animateYBy);
-    return v;
+float4 rotate2d(float4 x, float theta) {
+    float2x2 r = float2x2(float2(cos(theta), -sin(theta)),
+                          float2(sin(theta), cos(theta)));
+    return float4(x.xy * r, 0, 1);
 }
 
-fragment float4 myFragmentShader(MyVertex vertexIn [[stage_in]]) {
-    return vertexIn.color;
+uint2 rotate2d(uint2 x, float theta) {
+    float2x2 r = float2x2(float2(cos(theta), -sin(theta)),
+                          float2(sin(theta), cos(theta)));
+    return uint2(float2(x) * r);
+}
+
+vertex MyVertex vertexShader(device float4 *position [[ buffer(0) ]],
+                             device float2 *textureCoordinate [[ buffer(1) ]],
+                             constant Constants &constants [[ buffer(2) ]],
+                             uint vertexId [[vertex_id]]) {
+    return {
+        rotate2d(position[vertexId], constants.rotateBy),
+        textureCoordinate[vertexId]
+    };
+}
+
+fragment half4 fragmentShader(MyVertex vertexIn [[stage_in]],
+                              sampler sampler [[ sampler(0) ]],
+                              texture2d<float, access::sample> texture [[ texture(0) ]]) {
+    vertexIn.textureCoordinate.y = 1.0 - vertexIn.textureCoordinate.y;
+    return half4(texture.sample(sampler, vertexIn.textureCoordinate));
+}
+
+fragment half4 fragmentShaderForTexture(MyVertex vertexIn [[stage_in]],
+                              sampler sampler [[ sampler(0) ]],
+                              texture2d<float, access::sample> texture [[ texture(0) ]]) {
+    return half4(texture.sample(sampler, vertexIn.textureCoordinate));
+}
+
+kernel void computeShader(texture2d<float, access::read> inTexture [[ texture(0) ]],
+                          texture2d<float, access::write> outTexture [[ texture(1) ]],
+                          uint2 gridId [[ thread_position_in_grid ]]) {
+    float4 inColor = inTexture.read(gridId);
+    outTexture.write(inColor, gridId);
 }
