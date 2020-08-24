@@ -9,7 +9,6 @@
 import Cocoa
 import MetalKit
 
-
 private let vertexData: [Float] = [
     -1, -1, 0, 1,
     1, -1, 0, 1,
@@ -45,6 +44,9 @@ class ViewController: NSViewController, MTKViewDelegate {
     private var texPosBuffer: MTLBuffer!
     private var pipelineState: MTLRenderPipelineState!
     private var texture: MTLTexture!
+    
+    let blurRadius = 10
+    
     
     override func loadView() {
         view = MTKView(frame: NSRect(x: 0, y: 0, width: width, height: height), device: device)
@@ -102,13 +104,15 @@ class ViewController: NSViewController, MTKViewDelegate {
             renderPassDescriptor.colorAttachments[0].loadAction = .clear
             renderPassDescriptor.colorAttachments[0].storeAction = .store
             renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(0.0, 0.0, 1.0, 1.0)
-            
+
             let renderCommandEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor)!
             renderCommandEncoder.setRenderPipelineState(pipelineState)
             renderCommandEncoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
             renderCommandEncoder.setVertexBuffer(texPosBuffer, offset: 0, index: 1)
 
             renderCommandEncoder.setFragmentTexture(texture, index: 0)
+            print(texture.width)
+            print(texture.height)
             renderCommandEncoder.drawIndexedPrimitives(type: .triangleStrip, indexCount: indexData.count, indexType: .uint16, indexBuffer: indexBuffer, indexBufferOffset: 0)
             renderCommandEncoder.endEncoding()
         }
@@ -120,7 +124,7 @@ class ViewController: NSViewController, MTKViewDelegate {
         let textureLoader = MTKTextureLoader(device: device)
         let scaleFactor: CGFloat = 2
         texture = try! textureLoader.newTexture(name: name, scaleFactor: scaleFactor, bundle: nil)
-//        mtkView.colorPixelFormat = texture.pixelFormat
+        //        mtkView.colorPixelFormat = texture.pixelFormat
     }
     
 }
