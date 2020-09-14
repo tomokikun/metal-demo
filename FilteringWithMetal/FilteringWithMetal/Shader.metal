@@ -26,80 +26,24 @@ vertex VertexIn vertexShader(device float4 *position [[ buffer(0) ]],
 fragment half4 fragmentShader(VertexIn vertexIn [[ stage_in ]],
                               texture2d<float, access::sample> texture [[ texture(0) ]]) {
     constexpr sampler defaultSampler;
+    
+    const float width = 6016.0;
+    const float height = 3384.0;
+    const float dw = 1.0 / width;
+    const float dh = 1.0 / height;
     vertexIn.texCoor.y = 1 - vertexIn.texCoor.y;
-    half4 color = half4(texture.sample(defaultSampler, vertexIn.texCoor.xy));
-    return color;
-}
-
-//inline half4 normalFilter3x3(float2 pos, texture2d<float> tex) {
-//    constexpr sampler defaultSampler;
-//
-//    const float width = 6016.0;
-//    const float height = 3384.0;
-//    const float dw = 1.0 / width;
-//    const float dh = 1.0 / height;
-//
-//    const float3x3 normalF = float3x3(float3(1.0/9.0, 1.0/9.0, 1.0/9.0),
-//                                      float3(1.0/9.0, 1.0/9.0, 1.0/9.0),
-//                                      float3(1.0/9.0, 1.0/9.0, 1.0/9.0)) * 0.35;
-//    // 0 1 2
-//    // 3 4 5
-//    // 6 7 8
-//    float4 c_0 = float4(tex.sample(defaultSampler, pos + float2(-dw, -dh)));
-//    float4 c_1 = float4(tex.sample(defaultSampler, pos + float2(0.0, -dh)));
-//    float4 c_2 = float4(tex.sample(defaultSampler, pos + float2(dw, -dh)));
-//    float4 c_3 = float4(tex.sample(defaultSampler, pos + float2(-dw, 0.0)));
-//    float4 c_4 = float4(tex.sample(defaultSampler, pos + float2(0.0, 0.0)));
-//    float4 c_5 = float4(tex.sample(defaultSampler, pos + float2(dw, 0.0)));
-//    float4 c_6 = float4(tex.sample(defaultSampler, pos + float2(-dw, dh)));
-//    float4 c_7 = float4(tex.sample(defaultSampler, pos + float2(0.0, dh)));
-//    float4 c_8 = float4(tex.sample(defaultSampler, pos + float2(dw, dh)));
-//
-//    float3x3 r = float3x3(float3(c_0.r, c_1.r, c_2.r),
-//                          float3(c_3.r, c_4.r, c_5.r),
-//                          float3(c_6.r, c_7.r, c_8.r)) * normalF;
-//    float3x3 g = float3x3(float3(c_0.g, c_1.g, c_2.g),
-//                          float3(c_3.g, c_4.g, c_5.g),
-//                          float3(c_6.g, c_7.g, c_8.g)) * normalF;
-//    float3x3 b = float3x3(float3(c_0.b, c_1.b, c_2.b),
-//                          float3(c_3.b, c_4.b, c_5.b),
-//                          float3(c_6.b, c_7.b, c_8.b)) * normalF;
-//
-//    float sr = 0;
-//    float sg = 0;
-//    float sb = 0;
-//
-//    for (int i = 0; i < 3; i++) {
-//        for (int j = 0; j < 3; j++) {
-//            sr += r[i][j];
-//            sg += g[i][j];
-//            sb += b[i][j];
-//        }
-//    }
-//
-//    return half4(sr, sg, sb, 1.0);;
-//}
-
-kernel void blur5x5(texture2d<float, access::read> inTexture [[ texture(0) ]],
-                    texture2d<float, access::write> outTexture [[ texture(1) ]],
-                    texture2d<float, access::read> weights [[ texture(2) ]],
-                    uint2 gid [[ thread_position_in_grid ]] ) {
-    int size = weights.get_width();
-    int radius = size / 2;
     
     float4 accumColor(0, 0, 0, 0);
-    
+    float size = 30;
     for (int j = 0; j < size; j++)
     {
        for (int i = 0; i < size; i++)
        {
-           uint2 kernelIndex(i, j);
-           uint2 textureIndex(gid.x + (i - radius), gid.y + (j - radius));
-           float4 color = inTexture.read(textureIndex).rgba;
-           float4 weight = weights.read(kernelIndex).rrrr;
-           accumColor += weight * color;
+           float2 kernelIndex(i* dw + vertexIn.texCoor.x, j * dh + vertexIn.texCoor.y);
+           float4 color = texture.sample(defaultSampler, kernelIndex);
+           accumColor += color;
        }
     }
-
-    outTexture.write(float4(accumColor.rgb, 1), gid);
+    return half4(accumColor.rgba / (size * size));
+    
 }
